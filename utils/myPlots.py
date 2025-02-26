@@ -11,15 +11,16 @@ import CoolProp
 
 def myPhPlot(P, h, fluid):
     
+    # # add computed P and h data points
+    # plt.plot(h, P, color='green', marker = 'o')
+    
+    
     # make background thermophysical property lines using library
     Fluid = 'HEOS::' + fluid
     myPlot = PropertyPlot(Fluid, 'PH', unit_system='SI', tp_limits = 'ACHP')
     myPlot.calc_isolines(CoolProp.iQ, num=11)
     myPlot.calc_isolines(CoolProp.iT, num=25)
     myPlot.calc_isolines(CoolProp.iSmass, num=15)
-    
-    # add computed P and h data points
-    plt.plot(h, P, color='green', marker = 'o')
     
     # add labels
     myPlot.xlabel("Specific enthaply, [J/kg]")
@@ -28,7 +29,7 @@ def myPhPlot(P, h, fluid):
     # show plot
     myPlot.show()
     
-    return
+    return myPlot
 
 
 
@@ -51,5 +52,4 @@ def myTsPlot(T, s, fluid):
     # show plot
     myPlot.show()
     
-    
-    return
+    return myPlot

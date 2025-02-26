@@ -6,12 +6,14 @@ Created on Tue May  9 12:41:43 2023
 """
 
 
-from utils.myVCCmodels import myVCCmodel, getMyPR, getMyRho1, getMyLMTD
+from utils.myVCCmodels import myVCCmodel, getMyPR, getMyRho1, getMyLMTD, getMyCOP
 from utils.myPlots import myPhPlot, myTsPlot
 from utils.myCompressorModels import myCompressor1
 
 import numpy
 import matplotlib.pyplot as plt
+from CoolProp.Plots import PropertyPlot
+import CoolProp
 
 
 if __name__ == "__main__":
@@ -65,6 +67,8 @@ if __name__ == "__main__":
     diff_ = numpy.array([])
     Qcond1_ = numpy.array([])
     Qcond_wanted_ = numpy.array([])
+    convergedCOP_ = numpy.array([])
+    COP_ = numpy.array([])
     count = 0
     while True:
         
@@ -84,21 +88,40 @@ if __name__ == "__main__":
         LMTDcond = getMyLMTD('counter',Tcond,Tcond,Ticond,Tocond)
         LMTDevap = getMyLMTD('counter',Tievap,Toevap,Tevap,Tevap)
         Qcond1 = Ucond*Acond*LMTDcond
-        m_ref = Qcond1 / (H[1] - H[2]) # from m_ref we can calc Vd_rate and then comp. speed knowing Vd
+        m_ref = Qcond1 / (H[1] - H[5]) # from m_ref we can calc Vd_rate and then comp. speed knowing Vd
         Qevap1 = Uevap*Aevap*LMTDevap
-        Qevap2 = m_ref * (H[1] - H[0])
+        Qevap2 = m_ref * (H[0] - H[6])
+        
+        COP = getMyCOP(H)
         
         # collect for later visualization
         diff = abs(Qevap1 - Qevap2)
         diff_ = numpy.append(diff_, diff)
         Qcond1_ = numpy.append(Qcond1_, Qcond1)
         Qcond_wanted_ = numpy.append(Qcond_wanted_, Qcond_wanted)
+        COP_ = numpy.append(COP_, COP)
         
         if abs(Qcond1 - Qcond_wanted)/Qcond_wanted < tol_cond and abs(Qevap1 - Qevap2)/Qevap2 < tol_evap:
             # cycle found!
             # can calc COP, compressor speed
             # and exit iterative-while loop
             break
+            
+            # or instead of breaking, we will save results and 
+            # let the search continue until max Tcond and max Tevap reached
+            convergedCOP_ = numpy.append(convergedCOP_, COP)
+            myPhPlot(P, H, fluid)
+            myTsPlot(T, S, fluid)
+            if Tcond < Tcond_max - temp_step:
+                Tcond = Tcond + temp_step
+            else:
+                Tcond = Tcond_min
+                if Tevap < Tevap_max - temp_step:
+                    Tevap = Tevap + temp_step
+                else:
+                    # Tcond and Tevap both reached their maxs before cycle found
+                    AssertionError(True), "Tcond and Tevap both reached their maxs before cycle found"
+            
         else:
             # cycle does not match model nor required Qcond
             # need to update (increase) Tcond slightly and try again (which is like increasing PR)
@@ -127,10 +150,62 @@ if __name__ == "__main__":
     # on y-axis:
     #   Qcond_wanted_
     #   Qcond1_
-    #   diff_ which is abs(Qevap1 - Qevap2)
+    #   diff_ which is abs(Qevap1 - Qevap2)    
     fig, ax = plt.subplots()
-    ax.plot(Qcond_wanted_, '--', color='red')
-    ax.plot(Qcond1_, 'x', color='black')
-    ax.plot(diff_, 'o', color='blue')
+    ax.plot(Qcond_wanted_, '--', color='red', label="Capacity")
+    ax.plot(Qcond1_, 'x', color='black', label="Qcond1")
+    ax.plot(diff_, 'o', color='blue', label="Qevap1-Qevap2")
+    plt.xlabel('iteration')
+    plt.ylabel('Q, kW')
+    #ax.legend(['Capacity','Qcond1','Qevap1 - Qevap2'])
+    plt.legend()
+    ax.plot(Qcond_wanted_, '--', color='red', label="Capacity")
     plt.show()
+    
+    fig, ax = plt.subplots()
+    ax.plot(COP_, 'x', color='blue')
+    plt.show()
+    
+    
+    # Ph plot
+    # make background thermophysical property lines using library
+    Fluid = 'HEOS::' + fluid
+    myPlot = PropertyPlot(Fluid, 'PH', unit_system='SI', tp_limits = 'ACHP')
+    myPlot.calc_isolines(CoolProp.iQ, num=11)
+    myPlot.calc_isolines(CoolProp.iT, num=25)
+    myPlot.calc_isolines(CoolProp.iSmass, num=15)
+    
+    # add computed P and h data points
+    plt.plot(H, P, color='green', marker = 'o')
+    
+    plt.xlim([225000, 525000])
+    plt.ylim([50000, 10000000])
+    plt.legend(['3-1','3-2','3-3'])
+    
+    myPlot.show()
+    
+    
+    # Ts plot
+    # make background thermophysical property lines using library
+    Fluid = 'HEOS::' + fluid
+    myPlot = PropertyPlot(Fluid, 'TS', unit_system='SI', tp_limits = 'ACHP')
+    myPlot.calc_isolines(CoolProp.iQ, num=11)
+    myPlot.calc_isolines(CoolProp.iP, num=25)
+    # plot.calc_isolines(CoolProp.iP, iso_range=[1,50], num=10, rounding=True)
+    
+    # add computed T and s data points
+    plt.plot(S, T, color='green', marker = 'o')
+    
+    plt.xlim([1050, 2000])
+    plt.ylim([240, 400])
+    plt.legend(['3-1','3-2','3-3'])
+    
+    # show plot
+    myPlot.show()
+    
+    print('case 3')
+    print('P2=',P[1])
+    print('P1=',P[0])
+    print('PR=',myPR)
+    print('ncomp=',n_comp)
     
